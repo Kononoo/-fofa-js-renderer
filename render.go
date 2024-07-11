@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -19,7 +18,7 @@ type ScanResult struct {
 	ErrorMessage string      `json:"error_message"` // 渲染失败、错误信息
 }
 
-func Scan(url string, screenShot bool) (ScanResult, error) {
+func Scan(url string, screenshot bool) (ScanResult, error) {
 	start := time.Now() // 记录渲染时间
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
@@ -28,6 +27,7 @@ func Scan(url string, screenShot bool) (ScanResult, error) {
 	result.URL = url
 
 	var body string
+	var statusCode int
 	var headers http.Header
 	var screenshotBuf []byte
 
@@ -35,41 +35,32 @@ func Scan(url string, screenShot bool) (ScanResult, error) {
 		chromedp.Navigate(url),
 		chromedp.WaitReady("body"),
 		chromedp.OuterHTML("html", &body),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			res, exp, err := chromedp.Evaluate("document.readyState", nil).Do(ctx)
-			if err != nil {
-				return err
-			}
-			if res != "complete" {
-				return fmt.Errorf("page not fully loaded：%s", exp)
-			}
-			return nil
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			resp, err := chromedp.ExecAllocator(ctx).Target(ctx).Response()
-			if err != nil {
-				return err
-			}
-			headers = resp.Header
-			result.StatusCode = resp.Status
-			return nil
-		}),
+		chromedp.Evaluate(`(() => {
+			return fetch(window.location.href, {method: 'GET'}).then(response => {
+				const headers = {};
+				for (let [key, value] of response.headers.entries()) {
+					headers[key] = value;
+				}
+				return { headers: headers, statusCode: response.status };
+			});
+		})()`, &headers),
 	}
+
+	// 进行页面截屏
 	if screenshot {
 		tasks = append(tasks, chromedp.FullScreenshot(&screenshotBuf, 90))
+		result.ScreenShot = screenshotBuf
 	}
 	if err := chromedp.Run(ctx, tasks...); err != nil {
 		result.ErrorMessage = err.Error()
 		return result, err
 	}
 
+	// 封装结果
 	result.Body = body
 	result.Header = headers
+	result.StatusCode = statusCode
 	result.RenderTime = time.Since(start).Milliseconds()
-
-	if screenshot {
-		result.ScreenShot = screenshotBuf
-	}
 
 	return result, nil
 

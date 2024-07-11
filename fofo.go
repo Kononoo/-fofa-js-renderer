@@ -13,6 +13,11 @@ type FofaResponse struct {
 }
 
 func getFofaResults(apiKey, query string) ([]string, error) {
+	// 获取配置的apiKey
+	config, _ := loadConfig()
+	apiKey = config.ApiKey
+
+	// 对请求query进行base64编码
 	encodedQuery := base64.StdEncoding.EncodeToString([]byte(query))
 	url := fmt.Sprintf("https://fofa.info/api/v1/search/all?key=%s&qbase64=%s&fields=host&size=3000", apiKey, encodedQuery)
 

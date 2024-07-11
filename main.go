@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -29,6 +30,7 @@ func main() {
 		log.Fatal("You must provide either a URL or a file containing URLs")
 	}
 
+	// 所有要渲染的网站url
 	var urls []string
 	if url != "" {
 		urls = []string{url}
@@ -49,11 +51,17 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	render(urls)
+
+	// 创建result目录
+	if err := os.MkdirAll("result", os.ModePerm); err != nil {
+		log.Fatalf("Error creating result directory: %v", err)
+	}
+
+	renderFunc(urls)
 }
 
 // 页面渲染、保存结果
-func render(urls []string) {
+func renderFunc(urls []string) {
 	for _, url := range urls {
 		result, err := Scan(url, screenshot)
 		if err != nil {
@@ -61,25 +69,28 @@ func render(urls []string) {
 			continue
 		}
 
-		resultJson, err := json.Marshal(result)
+		resultJSON, err := json.Marshal(result)
 		if err != nil {
 			log.Printf("Error marshalling json: %s %v\n", url, err)
 			continue
 		}
 
-		resultFile := fmt.Sprintf("%s.json", strings.ReplaceAll(url, "https://", ""))
-		if err = ioutil.WriteFile(resultFile, resultJson, 0644); err != nil {
-			log.Printf("Error writing result to file for %s: %v\n", resultFile, err)
+		urlFileSafe := strings.ReplaceAll(url, "https://", "")
+		urlFileSafe = strings.ReplaceAll(urlFileSafe, "http://", "")
+		urlFileSafe = strings.ReplaceAll(urlFileSafe, "/", "_")
+
+		resultFile := filepath.Join("result", fmt.Sprintf("%s.json", urlFileSafe))
+		if err := ioutil.WriteFile(resultFile, resultJSON, 0644); err != nil {
+			log.Printf("Error writing result to file for %s: %v", url, err)
 			continue
 		}
 
 		if screenshot {
-			screenshotFile := fmt.Sprintf("%s.png", strings.ReplaceAll(url, "https://", ""))
-			if err := ioutil.WriteFile(screenshotFile, resultJson, 0644); err != nil {
-				log.Printf("Error writing result to file for %s: %v\n", screenshotFile, err)
+			screenshotFile := filepath.Join("result", fmt.Sprintf("%s.png", urlFileSafe))
+			if err := ioutil.WriteFile(screenshotFile, result.ScreenShot, 0644); err != nil {
+				log.Printf("Error writing screenshot to file for %s: %v", url, err)
 				continue
 			}
-
 		}
 
 	}
