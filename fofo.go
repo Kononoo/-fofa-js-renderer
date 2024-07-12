@@ -12,26 +12,18 @@ type FofaResponse struct {
 	Results [][]string `json:"results"`
 }
 
-func getFofaResults(apiKey, query string) ([]string, error) {
-	// 获取配置的apiKey
-	config, _ := loadConfig()
-	apiKey = config.ApiKey
+func getFofaResults(apiKey, query string, pageSize int) ([]string, error) {
 
 	// 对请求query进行base64编码
 	encodedQuery := base64.StdEncoding.EncodeToString([]byte(query))
-	url := fmt.Sprintf("https://fofa.info/api/v1/search/all?key=%s&qbase64=%s&fields=host&size=3000", apiKey, encodedQuery)
+	url := fmt.Sprintf("https://fofa.info/api/v1/search/all?key=%s&qbase64=%s&size=%d", apiKey, encodedQuery, pageSize)
 
-	req, err := http.NewRequest("Get", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	client := http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	resp, err2 := http.Get(url)
+	if err2 != nil {
+		return nil, err2
 	}
 	defer resp.Body.Close()
+	//log.Printf("FOFA-API返回的结果：%+v", resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get fofa results -> status code: %d", resp.StatusCode)
