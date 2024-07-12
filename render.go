@@ -33,13 +33,10 @@ func Scan(url string, screenshot bool) (ScanResult, error) {
 	// Listen for network events to capture response headers and status code
 	chromedp.ListenTarget(ctx, func(ev interface{}) {
 		if ev, ok := ev.(*network.EventResponseReceived); ok {
-			log.Printf("ev: %+v", ev)
-			//log.Printf("en.Response: %+v\n", ev.Response)
 			log.Printf("我的请求url: %s，response.url: %s", url, ev.Response.URL)
 			if ev.Type == network.ResourceTypeDocument {
 				result.StatusCode = int(ev.Response.Status)
 				result.Header = http.Header{}
-				log.Printf("result: %+v\n", result)
 				for k, v := range ev.Response.Headers {
 					result.Header.Set(k, fmt.Sprintf("%v", v))
 				}

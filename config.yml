@@ -1,2 +1,2 @@
 api_key: "c9b5570171fccebc5c24ae16b32f9bb4"    # FOFA-API
-max_urls: 100                                  # 设置要渲染的最大URL数量
+max_urls: 3000                                  # 设置要渲染的最大URL数量
