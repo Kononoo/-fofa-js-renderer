@@ -6,7 +6,8 @@ import (
 )
 
 type Config struct {
-	ApiKey string `yaml:"api_key"`
+	ApiKey  string `yaml:"api_key"`
+	MaxUrls int    `yaml:"max_urls"`
 }
 
 func loadConfig() (*Config, error) {
@@ -14,9 +15,11 @@ func loadConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var config Config
 	if err := yaml.Unmarshal(configFile, &config); err != nil {
 		return nil, err
 	}
+
 	return &config, nil
 }
