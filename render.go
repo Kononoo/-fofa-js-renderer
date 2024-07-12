@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"github.com/chromedp/cdproto/network"
+	"log"
 	"net/http"
 	"time"
 
@@ -24,43 +27,52 @@ func Scan(url string, screenshot bool) (ScanResult, error) {
 	defer cancel()
 
 	var result ScanResult // 渲染结果
-	result.URL = url
-
 	var body string
-	var statusCode int
-	var headers http.Header
-	var screenshotBuf []byte
+	var screen []byte
 
-	tasks := chromedp.Tasks{
-		chromedp.Navigate(url),
-		chromedp.WaitReady("body"),
-		chromedp.OuterHTML("html", &body),
-		chromedp.Evaluate(`(() => {
-			return fetch(window.location.href, {method: 'GET'}).then(response => {
-				const headers = {};
-				for (let [key, value] of response.headers.entries()) {
-					headers[key] = value;
+	// Listen for network events to capture response headers and status code
+	chromedp.ListenTarget(ctx, func(ev interface{}) {
+		if ev, ok := ev.(*network.EventResponseReceived); ok {
+			log.Printf("ev: %+v", ev)
+			//log.Printf("en.Response: %+v\n", ev.Response)
+			log.Printf("我的请求url: %s，response.url: %s", url, ev.Response.URL)
+			if ev.Type == network.ResourceTypeDocument {
+				result.StatusCode = int(ev.Response.Status)
+				result.Header = http.Header{}
+				log.Printf("result: %+v\n", result)
+				for k, v := range ev.Response.Headers {
+					result.Header.Set(k, fmt.Sprintf("%v", v))
 				}
-				return { headers: headers, statusCode: response.status };
-			});
-		})()`, &headers),
+			}
+		}
+	})
+
+	actions := []chromedp.Action{
+		network.Enable(),
+		chromedp.Navigate(url),
+		chromedp.WaitVisible(`body`, chromedp.ByQuery),
+		chromedp.OuterHTML(`html`, &body),
 	}
 
 	// 进行页面截屏
 	if screenshot {
-		tasks = append(tasks, chromedp.FullScreenshot(&screenshotBuf, 90))
-		result.ScreenShot = screenshotBuf
-	}
-	if err := chromedp.Run(ctx, tasks...); err != nil {
-		result.ErrorMessage = err.Error()
-		return result, err
+		actions = append(actions, chromedp.FullScreenshot(&screen, 90))
 	}
 
+	err := chromedp.Run(ctx, actions...)
+	if err != nil {
+		return result, fmt.Errorf("failed to render page: %w", err)
+	}
+
+	// 获取渲染时间
+	endTime := time.Now()
+	renderTime := endTime.Sub(start).Milliseconds()
+
 	// 封装结果
+	result.URL = url
 	result.Body = body
-	result.Header = headers
-	result.StatusCode = statusCode
-	result.RenderTime = time.Since(start).Milliseconds()
+	result.RenderTime = renderTime
+	result.ScreenShot = screen
 
 	return result, nil
 
