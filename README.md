@@ -26,6 +26,30 @@ type ScanResult struct {
 }
 ```
 
+## 功能说明
+- -u：单个 URL
+> 描述：指定单个 URL 进行渲染。
+示例：-u "https://example.com"
+- -f：文件路径
+> 描述：指定一个文件，文件中包含多个 URL，每行一个 URL。
+示例：-f "urls.txt"
+- -q：FOFA 查询语句
+> 描述：指定一个 FOFA 查询语句，通过 FOFA API 获取 URL 列表进行渲染。
+示例：-q "title=baidu.com"
+- -s：是否截图 
+> 描述：指定是否对页面进行截图，生成截图文件。
+示例：-s
+
+
+## 代码说明
+- config.yml：配置文件，存放 FOFA API Key 和最大 URL 数量。
+- main.go：主入口文件，处理命令行参数，调用渲染函数。
+- render.go：包含 Scan 函数，执行 JS 渲染。
+- config.go：包含加载配置文件的函数。
+- result/：保存渲染结果的目录。
+
+
+
 ## 学习目标
 - 了解 JS 渲染爬虫的概念和作用。
 - 学习如何使用 Golang 实现简单的 JS 渲染爬虫工具。
