@@ -22,7 +22,6 @@ type ScanResult struct {
 }
 
 func Scan(url string, screenshot bool) (ScanResult, error) {
-	start := time.Now() // 记录渲染时间
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
 
@@ -33,7 +32,7 @@ func Scan(url string, screenshot bool) (ScanResult, error) {
 	// Listen for network events to capture response headers and status code
 	chromedp.ListenTarget(ctx, func(ev interface{}) {
 		if ev, ok := ev.(*network.EventResponseReceived); ok {
-			log.Printf("我的请求url: %s，response.url: %s", url, ev.Response.URL)
+			log.Printf("我的请求url: %s，response.url: %s", url, truncateUrl(ev.Response.URL, 100))
 			if ev.Type == network.ResourceTypeDocument {
 				result.StatusCode = int(ev.Response.Status)
 				result.Header = http.Header{}
@@ -43,6 +42,9 @@ func Scan(url string, screenshot bool) (ScanResult, error) {
 			}
 		}
 	})
+
+	// 记录开始渲染时间
+	start := time.Now()
 
 	actions := []chromedp.Action{
 		network.Enable(),
@@ -73,4 +75,12 @@ func Scan(url string, screenshot bool) (ScanResult, error) {
 
 	return result, nil
 
+}
+
+// 限制返回url的长度
+func truncateUrl(url string, maxLength int) string {
+	if len(url) > maxLength {
+		return url[:maxLength] + "..."
+	}
+	return url
 }

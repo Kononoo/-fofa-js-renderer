@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 var (
@@ -82,40 +83,82 @@ func main() {
 
 // 页面渲染、保存结果
 func renderFunc(urls []string) {
+	var wg sync.WaitGroup
+	concurrency := 50                           // 设置并发数量
+	sem := make(chan struct{}, concurrency)     // 控制并发数的信号量
+	results := make(chan ScanResult, len(urls)) // 存储渲染结果通道
+
 	for _, url := range urls {
-		result, err := Scan(url, screenshot)
-		//log.Printf("输出结果：result=%+v", result)
-
-		if err != nil {
-			log.Printf("Error scanning %s: %v\n", url, err)
-			continue
-		}
-
-		resultJSON, err := json.Marshal(result)
-		if err != nil {
-			log.Printf("Error marshalling json: %s %v\n", url, err)
-			continue
-		}
-
-		urlFileSafe := strings.ReplaceAll(url, "https://", "")
-		urlFileSafe = strings.ReplaceAll(urlFileSafe, "http://", "")
-		urlFileSafe = strings.ReplaceAll(urlFileSafe, "/", "_")
-
-		resultFile := filepath.Join("result", fmt.Sprintf("%s.json", urlFileSafe)) // 目标文件名
-		if err := ioutil.WriteFile(resultFile, resultJSON, 0644); err != nil {
-			log.Printf("Error writing result to file for %s: %v", url, err)
-			continue
-		}
-		log.Printf("成功保存文件->JSON：%s", resultFile)
-
-		if screenshot {
-			screenshotFile := filepath.Join("result", fmt.Sprintf("%s.png", urlFileSafe))
-			if err := ioutil.WriteFile(screenshotFile, result.ScreenShot, 0644); err != nil {
-				log.Printf("Error writing screenshot to file for %s: %v", url, err)
-				continue
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			sem <- struct{}{} // 获取一个信号量
+			result, err := Scan(url, screenshot)
+			if err != nil {
+				result.ErrorMessage = err.Error()
 			}
+			results <- result
+			<-sem // 释放一个信号量
+		}(url)
+	}
+
+	wg.Wait()
+
+	// 关闭结果通道
+	go func() {
+		close(results)
+	}()
+
+	// 保存渲染结果
+	for result := range results {
+		if result.URL != "" {
+			log.Printf("Skipping empty result for URL: %s", result.URL)
+		} else {
+			saveResult(result)
+		}
+	}
+}
+
+// 保存结果到文件
+func saveResult(result ScanResult) {
+	resultJson, err := json.Marshal(result)
+	if err != nil {
+		log.Printf("Error marshalling json: %s %v\n", result.URL, err)
+		return
+	}
+
+	urlFileSafe := createSafeFileName(result.URL)
+
+	// 保存渲染结果JSON文件
+	resultFile := filepath.Join("result", fmt.Sprintf("%s.json", urlFileSafe))
+	if err := ioutil.WriteFile(resultFile, resultJson, 0644); err != nil {
+		log.Printf("Error writing result to file for %s: %v", result.URL, err)
+		return
+	}
+	log.Printf("成功保存文件->JSON：%s", resultFile)
+
+	// 如果需要截图则保存截图文件
+	if screenshot {
+		screenshotFile := filepath.Join("result", fmt.Sprintf("%s.png", urlFileSafe))
+		if err := ioutil.WriteFile(screenshotFile, result.ScreenShot, 0644); err != nil {
+			log.Printf("Error writing screenshot to file for %s: %v", result.URL, err)
+		} else {
 			log.Printf("成功保存文件->图片：%s", screenshotFile)
 		}
-
 	}
+}
+
+// 生成安全的文件名
+func createSafeFileName(url string) string {
+	urlFileSafe := strings.ReplaceAll(url, "https://", "")
+	urlFileSafe = strings.ReplaceAll(urlFileSafe, "http://", "")
+	urlFileSafe = strings.ReplaceAll(urlFileSafe, "/", "_")
+	urlFileSafe = strings.ReplaceAll(urlFileSafe, "?", "_")
+	urlFileSafe = strings.ReplaceAll(urlFileSafe, "&", "_")
+	urlFileSafe = strings.ReplaceAll(urlFileSafe, "=", "_")
+	urlFileSafe = strings.ReplaceAll(urlFileSafe, ":", "_")
+	if len(urlFileSafe) > 100 {
+		urlFileSafe = urlFileSafe[:100] // 限制文件名长度，避免文件名过长
+	}
+	return urlFileSafe
 }

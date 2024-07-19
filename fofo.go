@@ -13,7 +13,6 @@ type FofaResponse struct {
 }
 
 func getFofaResults(apiKey, query string, pageSize int) ([]string, error) {
-
 	// 对请求query进行base64编码
 	encodedQuery := base64.StdEncoding.EncodeToString([]byte(query))
 	url := fmt.Sprintf("https://fofa.info/api/v1/search/all?key=%s&qbase64=%s&size=%d", apiKey, encodedQuery, pageSize)
